@@ -40,7 +40,13 @@ import {
   Gift,
   BarChart3,
   FileText,
-  AlertCircle
+  AlertCircle,
+  Palette,
+  Image,
+  Video,
+  Link as LinkIcon,
+  Upload,
+  Save
 } from 'lucide-react'
 
 // Types
@@ -92,6 +98,24 @@ interface AppSettings {
   enable_apple_auth: boolean
   maintenance_mode: boolean
   allow_new_signups: boolean
+}
+
+interface VisualCustomization {
+  primary_color: string
+  secondary_color: string
+  accent_color: string
+  logo_url: string
+  company_name: string
+  tagline: string
+}
+
+interface ContentItem {
+  id: string
+  type: 'video' | 'link' | 'document'
+  title: string
+  url: string
+  description: string
+  created_at: string
 }
 
 // Toast notification
@@ -250,12 +274,36 @@ export default function AdminPanel() {
     maintenance_mode: false,
     allow_new_signups: true
   })
+
+  // Visual Customization State
+  const [visualCustomization, setVisualCustomization] = useState<VisualCustomization>({
+    primary_color: '#8B5CF6',
+    secondary_color: '#EC4899',
+    accent_color: '#F59E0B',
+    logo_url: '',
+    company_name: 'SyncMyMind',
+    tagline: 'Organize seus projetos com inteligência'
+  })
+
+  // Content Items State
+  const [contentItems, setContentItems] = useState<ContentItem[]>([
+    {
+      id: '1',
+      type: 'video',
+      title: 'Tutorial: Como usar o assistente de IA',
+      url: 'https://youtube.com/watch?v=example',
+      description: 'Aprenda a usar todas as funcionalidades do assistente',
+      created_at: '2024-03-15'
+    }
+  ])
   
   // Dialog States
   const [showPlanDialog, setShowPlanDialog] = useState(false)
   const [showPromoDialog, setShowPromoDialog] = useState(false)
+  const [showContentDialog, setShowContentDialog] = useState(false)
   const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null)
   const [editingPromo, setEditingPromo] = useState<Promotion | null>(null)
+  const [editingContent, setEditingContent] = useState<ContentItem | null>(null)
   
   // Form States
   const [planForm, setPlanForm] = useState({
@@ -279,6 +327,13 @@ export default function AdminPanel() {
     value: 0,
     valid_until: '',
     max_uses: 0
+  })
+
+  const [contentForm, setContentForm] = useState({
+    type: 'video' as const,
+    title: '',
+    url: '',
+    description: ''
   })
 
   // Handlers
@@ -444,6 +499,35 @@ export default function AdminPanel() {
   const updateSettings = () => {
     showToast('✅ Configurações salvas com sucesso!')
   }
+
+  const saveVisualCustomization = () => {
+    showToast('✅ Personalização visual salva com sucesso!')
+  }
+
+  const handleCreateContent = (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    const newContent: ContentItem = {
+      id: Date.now().toString(),
+      type: contentForm.type,
+      title: contentForm.title,
+      url: contentForm.url,
+      description: contentForm.description,
+      created_at: new Date().toISOString()
+    }
+    
+    setContentItems([...contentItems, newContent])
+    setShowContentDialog(false)
+    resetContentForm()
+    showToast('✅ Conteúdo adicionado com sucesso!')
+  }
+
+  const handleDeleteContent = (id: string) => {
+    if (confirm('Tem certeza que deseja excluir este conteúdo?')) {
+      setContentItems(contentItems.filter(c => c.id !== id))
+      showToast('🗑️ Conteúdo excluído com sucesso!')
+    }
+  }
   
   const resetPlanForm = () => {
     setPlanForm({
@@ -469,6 +553,15 @@ export default function AdminPanel() {
       value: 0,
       valid_until: '',
       max_uses: 0
+    })
+  }
+
+  const resetContentForm = () => {
+    setContentForm({
+      type: 'video',
+      title: '',
+      url: '',
+      description: ''
     })
   }
 
@@ -516,7 +609,7 @@ export default function AdminPanel() {
 
       <div className="max-w-[1600px] mx-auto px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 bg-white/80 backdrop-blur-sm shadow-lg border border-gray-200 p-1">
+          <TabsList className="grid w-full grid-cols-7 bg-white/80 backdrop-blur-sm shadow-lg border border-gray-200 p-1">
             <TabsTrigger value="dashboard" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-600 data-[state=active]:text-white">
               <BarChart3 className="h-4 w-4 mr-2" />
               Dashboard
@@ -533,9 +626,17 @@ export default function AdminPanel() {
               <Gift className="h-4 w-4 mr-2" />
               Promoções
             </TabsTrigger>
+            <TabsTrigger value="visual" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-600 data-[state=active]:text-white">
+              <Palette className="h-4 w-4 mr-2" />
+              Visual
+            </TabsTrigger>
+            <TabsTrigger value="content" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-600 data-[state=active]:text-white">
+              <FileText className="h-4 w-4 mr-2" />
+              Conteúdo
+            </TabsTrigger>
             <TabsTrigger value="settings" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-600 data-[state=active]:text-white">
               <Settings className="h-4 w-4 mr-2" />
-              Configurações
+              Config
             </TabsTrigger>
           </TabsList>
 
@@ -968,6 +1069,230 @@ export default function AdminPanel() {
             </div>
           </TabsContent>
 
+          {/* VISUAL CUSTOMIZATION */}
+          <TabsContent value="visual" className="space-y-6">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900">Personalização Visual</h2>
+              <p className="text-gray-600 mt-1">Customize a aparência do aplicativo</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Palette className="h-5 w-5 mr-2 text-purple-600" />
+                    Cores do Tema
+                  </CardTitle>
+                  <CardDescription>Defina a paleta de cores do aplicativo</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="primary-color">Cor Primária</Label>
+                    <div className="flex space-x-3">
+                      <Input
+                        id="primary-color"
+                        type="color"
+                        value={visualCustomization.primary_color}
+                        onChange={(e) => setVisualCustomization({...visualCustomization, primary_color: e.target.value})}
+                        className="w-20 h-12"
+                      />
+                      <Input
+                        type="text"
+                        value={visualCustomization.primary_color}
+                        onChange={(e) => setVisualCustomization({...visualCustomization, primary_color: e.target.value})}
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="secondary-color">Cor Secundária</Label>
+                    <div className="flex space-x-3">
+                      <Input
+                        id="secondary-color"
+                        type="color"
+                        value={visualCustomization.secondary_color}
+                        onChange={(e) => setVisualCustomization({...visualCustomization, secondary_color: e.target.value})}
+                        className="w-20 h-12"
+                      />
+                      <Input
+                        type="text"
+                        value={visualCustomization.secondary_color}
+                        onChange={(e) => setVisualCustomization({...visualCustomization, secondary_color: e.target.value})}
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="accent-color">Cor de Destaque</Label>
+                    <div className="flex space-x-3">
+                      <Input
+                        id="accent-color"
+                        type="color"
+                        value={visualCustomization.accent_color}
+                        onChange={(e) => setVisualCustomization({...visualCustomization, accent_color: e.target.value})}
+                        className="w-20 h-12"
+                      />
+                      <Input
+                        type="text"
+                        value={visualCustomization.accent_color}
+                        onChange={(e) => setVisualCustomization({...visualCustomization, accent_color: e.target.value})}
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Image className="h-5 w-5 mr-2 text-blue-600" />
+                    Identidade da Marca
+                  </CardTitle>
+                  <CardDescription>Configure logo e informações da empresa</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="company-name">Nome da Empresa</Label>
+                    <Input
+                      id="company-name"
+                      value={visualCustomization.company_name}
+                      onChange={(e) => setVisualCustomization({...visualCustomization, company_name: e.target.value})}
+                      placeholder="SyncMyMind"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="tagline">Slogan</Label>
+                    <Input
+                      id="tagline"
+                      value={visualCustomization.tagline}
+                      onChange={(e) => setVisualCustomization({...visualCustomization, tagline: e.target.value})}
+                      placeholder="Organize seus projetos com inteligência"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="logo-url">URL do Logo</Label>
+                    <Input
+                      id="logo-url"
+                      value={visualCustomization.logo_url}
+                      onChange={(e) => setVisualCustomization({...visualCustomization, logo_url: e.target.value})}
+                      placeholder="https://exemplo.com/logo.png"
+                    />
+                  </div>
+
+                  <div className="p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 text-center">
+                    <Upload className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-600">Clique para fazer upload do logo</p>
+                    <p className="text-xs text-gray-500 mt-1">PNG, JPG ou SVG (max. 2MB)</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="flex justify-end">
+              <Button 
+                onClick={saveVisualCustomization}
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                Salvar Personalização
+              </Button>
+            </div>
+          </TabsContent>
+
+          {/* CONTENT MANAGEMENT */}
+          <TabsContent value="content" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900">Gerenciar Conteúdo</h2>
+                <p className="text-gray-600 mt-1">Adicione vídeos, links e documentos</p>
+              </div>
+              <Button 
+                onClick={() => {
+                  setEditingContent(null)
+                  resetContentForm()
+                  setShowContentDialog(true)
+                }}
+                className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 shadow-lg"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Adicionar Conteúdo
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {contentItems.map(item => (
+                <Card key={item.id} className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-lg ${
+                          item.type === 'video' ? 'bg-gradient-to-br from-red-500 to-pink-600' :
+                          item.type === 'link' ? 'bg-gradient-to-br from-blue-500 to-cyan-600' :
+                          'bg-gradient-to-br from-green-500 to-emerald-600'
+                        }`}>
+                          {item.type === 'video' && <Video className="h-6 w-6 text-white" />}
+                          {item.type === 'link' && <LinkIcon className="h-6 w-6 text-white" />}
+                          {item.type === 'document' && <FileText className="h-6 w-6 text-white" />}
+                        </div>
+                        <div>
+                          <CardTitle className="text-lg">{item.title}</CardTitle>
+                          <CardDescription className="text-xs capitalize">{item.type}</CardDescription>
+                        </div>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-gray-600">{item.description}</p>
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>Criado em {new Date(item.created_at).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                    <div className="flex items-center space-x-2 pt-2 border-t">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => window.open(item.url, '_blank')}
+                      >
+                        Abrir
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDeleteContent(item.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {contentItems.length === 0 && (
+              <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+                <CardContent className="py-12 text-center">
+                  <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhum conteúdo adicionado</h3>
+                  <p className="text-gray-600 mb-4">Comece adicionando vídeos, links ou documentos</p>
+                  <Button 
+                    onClick={() => setShowContentDialog(true)}
+                    className="bg-gradient-to-r from-blue-600 to-cyan-600"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar Primeiro Conteúdo
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
           {/* SETTINGS */}
           <TabsContent value="settings" className="space-y-6">
             <div>
@@ -1330,6 +1655,78 @@ export default function AdminPanel() {
               </Button>
               <Button type="submit" className="bg-gradient-to-r from-orange-600 to-red-600">
                 {editingPromo ? 'Atualizar' : 'Criar'} Promoção
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* CONTENT DIALOG */}
+      <Dialog open={showContentDialog} onOpenChange={setShowContentDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar Conteúdo</DialogTitle>
+            <DialogDescription>
+              Adicione vídeos, links ou documentos ao aplicativo
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleCreateContent} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="content-type">Tipo de Conteúdo</Label>
+              <Select value={contentForm.type} onValueChange={(value: 'video' | 'link' | 'document') => setContentForm({...contentForm, type: value})}>
+                <SelectTrigger id="content-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="video">Vídeo</SelectItem>
+                  <SelectItem value="link">Link</SelectItem>
+                  <SelectItem value="document">Documento</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="content-title">Título</Label>
+              <Input
+                id="content-title"
+                value={contentForm.title}
+                onChange={(e) => setContentForm({...contentForm, title: e.target.value})}
+                placeholder="Ex: Tutorial de uso"
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="content-url">URL</Label>
+              <Input
+                id="content-url"
+                type="url"
+                value={contentForm.url}
+                onChange={(e) => setContentForm({...contentForm, url: e.target.value})}
+                placeholder="https://..."
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="content-description">Descrição</Label>
+              <Textarea
+                id="content-description"
+                value={contentForm.description}
+                onChange={(e) => setContentForm({...contentForm, description: e.target.value})}
+                placeholder="Breve descrição do conteúdo"
+                rows={3}
+                required
+              />
+            </div>
+            
+            <div className="flex justify-end space-x-3 pt-4">
+              <Button type="button" variant="outline" onClick={() => setShowContentDialog(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" className="bg-gradient-to-r from-blue-600 to-cyan-600">
+                Adicionar Conteúdo
               </Button>
             </div>
           </form>
