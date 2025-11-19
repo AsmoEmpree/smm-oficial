@@ -1,805 +1,1340 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from 'react'
-import { Brain, Users, FolderOpen, BarChart3, Settings, Shield, LogOut, Search, Filter, Plus, Edit3, Trash2, Eye, Calendar, DollarSign, TrendingUp, AlertCircle, CheckCircle, Clock, User, Mail, Phone } from 'lucide-react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Textarea } from '@/components/ui/textarea'
-import { userService, projectService, statsService, type User, type Project } from '@/lib/supabase'
+import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { 
+  Brain, 
+  Plus, 
+  Search, 
+  Users, 
+  CreditCard,
+  Settings,
+  Tag,
+  TrendingUp,
+  Edit,
+  Trash2,
+  Check,
+  X,
+  Shield,
+  Zap,
+  Target,
+  DollarSign,
+  Percent,
+  Calendar,
+  Lock,
+  Unlock,
+  Mail,
+  User,
+  Crown,
+  Sparkles,
+  Gift,
+  BarChart3,
+  FileText,
+  AlertCircle
+} from 'lucide-react'
 
-interface SystemStats {
-  totalUsers: number
-  activeUsers: number
-  totalProjects: number
-  activeProjects: number
-  totalRevenue: number
-  totalInvestment: number
-  totalProfit: number
-  monthlyGrowth: number
+// Types
+interface SubscriptionPlan {
+  id: string
+  name: string
+  description: string
+  price_monthly: number
+  price_yearly: number
+  features: string[]
+  max_projects: number
+  ai_credits: number
+  storage_gb: number
+  support_level: 'email' | 'priority' | '24/7'
+  active: boolean
+  color: string
+  icon: string
+  popular: boolean
+}
+
+interface UserAccount {
+  id: string
+  name: string
+  email: string
+  plan: string
+  status: 'active' | 'blocked' | 'pending'
+  created_at: string
+  last_login: string
+  projects_count: number
+  ai_credits_used: number
+}
+
+interface Promotion {
+  id: string
+  code: string
+  type: 'percentage' | 'fixed'
+  value: number
+  valid_until: string
+  max_uses: number
+  current_uses: number
+  active: boolean
+}
+
+interface AppSettings {
+  ai_model: string
+  ai_temperature: number
+  max_tokens: number
+  enable_google_auth: boolean
+  enable_apple_auth: boolean
+  maintenance_mode: boolean
+  allow_new_signups: boolean
+}
+
+// Toast notification
+const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const toast = document.createElement('div')
+  toast.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-xl z-50 transition-all duration-300 ${
+    type === 'success' ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white' : 'bg-gradient-to-r from-red-500 to-rose-600 text-white'
+  }`
+  toast.textContent = message
+  
+  document.body.appendChild(toast)
+  
+  setTimeout(() => {
+    if (document.body.contains(toast)) {
+      toast.style.opacity = '0'
+      setTimeout(() => {
+        if (document.body.contains(toast)) {
+          document.body.removeChild(toast)
+        }
+      }, 300)
+    }
+  }, 3000)
 }
 
 export default function AdminPanel() {
-  const [currentView, setCurrentView] = useState<'dashboard' | 'users' | 'projects' | 'settings'>('dashboard')
-  const [users, setUsers] = useState<User[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
-  const [stats, setStats] = useState<SystemStats>({
-    totalUsers: 0,
-    activeUsers: 0,
-    totalProjects: 0,
-    activeProjects: 0,
-    totalRevenue: 0,
-    totalInvestment: 0,
-    totalProfit: 0,
-    monthlyGrowth: 0
-  })
+  const [activeTab, setActiveTab] = useState('dashboard')
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive' | 'suspended'>('all')
-  const [isCreateUserOpen, setIsCreateUserOpen] = useState(false)
-  const [selectedUser, setSelectedUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-
-  // Carregar dados iniciais
-  useEffect(() => {
-    loadAllData()
-  }, [])
-
-  const loadAllData = async () => {
-    try {
-      setIsLoading(true)
-      await Promise.all([
-        loadUsers(),
-        loadProjects(),
-        loadStats()
-      ])
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error)
-    } finally {
-      setIsLoading(false)
+  
+  // Plans State
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([
+    {
+      id: '1',
+      name: 'Básico',
+      description: 'Perfeito para começar a organizar seus projetos',
+      price_monthly: 29,
+      price_yearly: 290,
+      features: [
+        'Até 5 projetos ativos',
+        '10 créditos de IA por mês',
+        'Assistente de IA básico',
+        'Métricas individuais',
+        'Suporte por email',
+        'Armazenamento de 1GB'
+      ],
+      max_projects: 5,
+      ai_credits: 10,
+      storage_gb: 1,
+      support_level: 'email',
+      active: true,
+      color: 'from-blue-500 to-cyan-500',
+      icon: 'zap',
+      popular: false
+    },
+    {
+      id: '2',
+      name: 'Profissional',
+      description: 'Para profissionais que precisam de mais poder',
+      price_monthly: 79,
+      price_yearly: 790,
+      features: [
+        'Projetos ilimitados',
+        '100 créditos de IA por mês',
+        'Assistente de IA avançado',
+        'Métricas de equipe completas',
+        'Comunicação otimizada',
+        'Planejamento com IA',
+        'Suporte prioritário',
+        'Armazenamento de 10GB',
+        'Integrações avançadas'
+      ],
+      max_projects: -1,
+      ai_credits: 100,
+      storage_gb: 10,
+      support_level: 'priority',
+      active: true,
+      color: 'from-purple-500 to-pink-500',
+      icon: 'trending-up',
+      popular: true
+    },
+    {
+      id: '3',
+      name: 'Empresarial',
+      description: 'Solução completa para equipes e empresas',
+      price_monthly: 199,
+      price_yearly: 1990,
+      features: [
+        'Tudo do Profissional',
+        'Créditos de IA ilimitados',
+        'IA personalizada para sua empresa',
+        'Múltiplas equipes',
+        'Painel admin completo',
+        'White label disponível',
+        'Suporte 24/7 dedicado',
+        'Armazenamento ilimitado',
+        'API personalizada',
+        'Treinamento da equipe'
+      ],
+      max_projects: -1,
+      ai_credits: -1,
+      storage_gb: -1,
+      support_level: '24/7',
+      active: true,
+      color: 'from-orange-500 to-red-500',
+      icon: 'shield',
+      popular: false
     }
-  }
-
-  const loadUsers = async () => {
-    try {
-      const userData = await userService.getAll()
-      setUsers(userData || [])
-    } catch (error) {
-      console.error('Erro ao carregar usuários:', error)
-      setUsers([])
+  ])
+  
+  // Users State
+  const [users, setUsers] = useState<UserAccount[]>([
+    {
+      id: '1',
+      name: 'João Silva',
+      email: 'joao@example.com',
+      plan: 'Profissional',
+      status: 'active',
+      created_at: '2024-01-15',
+      last_login: '2024-03-20',
+      projects_count: 12,
+      ai_credits_used: 45
+    },
+    {
+      id: '2',
+      name: 'Maria Santos',
+      email: 'maria@example.com',
+      plan: 'Básico',
+      status: 'active',
+      created_at: '2024-02-10',
+      last_login: '2024-03-19',
+      projects_count: 3,
+      ai_credits_used: 8
     }
-  }
-
-  const loadProjects = async () => {
-    try {
-      const projectData = await projectService.getAll()
-      setProjects(projectData || [])
-    } catch (error) {
-      console.error('Erro ao carregar projetos:', error)
-      setProjects([])
+  ])
+  
+  // Promotions State
+  const [promotions, setPromotions] = useState<Promotion[]>([
+    {
+      id: '1',
+      code: 'WELCOME50',
+      type: 'percentage',
+      value: 50,
+      valid_until: '2024-12-31',
+      max_uses: 100,
+      current_uses: 23,
+      active: true
     }
-  }
-
-  const loadStats = async () => {
-    try {
-      const systemStats = await statsService.getSystemStats()
-      setStats(systemStats)
-    } catch (error) {
-      console.error('Erro ao carregar estatísticas:', error)
-      setStats({
-        totalUsers: 0,
-        activeUsers: 0,
-        totalProjects: 0,
-        activeProjects: 0,
-        totalRevenue: 0,
-        totalInvestment: 0,
-        totalProfit: 0,
-        monthlyGrowth: 0
-      })
-    }
-  }
-
-  const handleLogout = () => {
-    window.location.href = '/'
-  }
-
-  const handleCreateUser = async (formData: FormData) => {
-    try {
-      const userData = {
-        name: formData.get('name') as string,
-        email: formData.get('email') as string,
-        phone: formData.get('phone') as string,
-        role: formData.get('role') as 'admin' | 'user' | 'manager',
-        status: 'active' as const
-      }
-
-      await userService.create(userData)
-      await loadUsers()
-      await loadStats()
-      setIsCreateUserOpen(false)
-    } catch (error) {
-      console.error('Erro ao criar usuário:', error)
-      alert('Erro ao criar usuário. Tente novamente.')
-    }
-  }
-
-  const handleUserStatusChange = async (userId: string, newStatus: 'active' | 'inactive' | 'suspended') => {
-    try {
-      await userService.update(userId, { status: newStatus })
-      await loadUsers()
-      await loadStats()
-    } catch (error) {
-      console.error('Erro ao atualizar status do usuário:', error)
-      alert('Erro ao atualizar status. Tente novamente.')
-    }
-  }
-
-  const handleDeleteUser = async (userId: string) => {
-    if (confirm('Tem certeza que deseja excluir este usuário?')) {
-      try {
-        await userService.delete(userId)
-        await loadUsers()
-        await loadStats()
-      } catch (error) {
-        console.error('Erro ao excluir usuário:', error)
-        alert('Erro ao excluir usuário. Tente novamente.')
-      }
-    }
-  }
-
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesFilter = filterStatus === 'all' || user.status === filterStatus
-    return matchesSearch && matchesFilter
+  ])
+  
+  // Settings State
+  const [settings, setSettings] = useState<AppSettings>({
+    ai_model: 'gpt-4o',
+    ai_temperature: 0.7,
+    max_tokens: 2000,
+    enable_google_auth: true,
+    enable_apple_auth: false,
+    maintenance_mode: false,
+    allow_new_signups: true
+  })
+  
+  // Dialog States
+  const [showPlanDialog, setShowPlanDialog] = useState(false)
+  const [showPromoDialog, setShowPromoDialog] = useState(false)
+  const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null)
+  const [editingPromo, setEditingPromo] = useState<Promotion | null>(null)
+  
+  // Form States
+  const [planForm, setPlanForm] = useState({
+    name: '',
+    description: '',
+    price_monthly: 0,
+    price_yearly: 0,
+    features: '',
+    max_projects: 0,
+    ai_credits: 0,
+    storage_gb: 0,
+    support_level: 'email' as const,
+    color: 'from-blue-500 to-cyan-500',
+    icon: 'zap',
+    popular: false
+  })
+  
+  const [promoForm, setPromoForm] = useState({
+    code: '',
+    type: 'percentage' as const,
+    value: 0,
+    valid_until: '',
+    max_uses: 0
   })
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-green-500'
-      case 'inactive': return 'bg-gray-500'
-      case 'suspended': return 'bg-red-500'
-      case 'completed': return 'bg-blue-500'
-      case 'paused': return 'bg-yellow-500'
-      case 'cancelled': return 'bg-red-600'
-      default: return 'bg-gray-500'
+  // Handlers
+  const handleCreatePlan = (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    const newPlan: SubscriptionPlan = {
+      id: Date.now().toString(),
+      name: planForm.name,
+      description: planForm.description,
+      price_monthly: planForm.price_monthly,
+      price_yearly: planForm.price_yearly,
+      features: planForm.features.split('\n').filter(f => f.trim()),
+      max_projects: planForm.max_projects,
+      ai_credits: planForm.ai_credits,
+      storage_gb: planForm.storage_gb,
+      support_level: planForm.support_level,
+      active: true,
+      color: planForm.color,
+      icon: planForm.icon,
+      popular: planForm.popular
+    }
+    
+    setPlans([...plans, newPlan])
+    setShowPlanDialog(false)
+    resetPlanForm()
+    showToast('✅ Plano criado com sucesso!')
+  }
+  
+  const handleUpdatePlan = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingPlan) return
+    
+    const updatedPlan: SubscriptionPlan = {
+      ...editingPlan,
+      name: planForm.name,
+      description: planForm.description,
+      price_monthly: planForm.price_monthly,
+      price_yearly: planForm.price_yearly,
+      features: planForm.features.split('\n').filter(f => f.trim()),
+      max_projects: planForm.max_projects,
+      ai_credits: planForm.ai_credits,
+      storage_gb: planForm.storage_gb,
+      support_level: planForm.support_level,
+      color: planForm.color,
+      icon: planForm.icon,
+      popular: planForm.popular
+    }
+    
+    setPlans(plans.map(p => p.id === editingPlan.id ? updatedPlan : p))
+    setEditingPlan(null)
+    setShowPlanDialog(false)
+    resetPlanForm()
+    showToast('✅ Plano atualizado com sucesso!')
+  }
+  
+  const handleEditPlan = (plan: SubscriptionPlan) => {
+    setEditingPlan(plan)
+    setPlanForm({
+      name: plan.name,
+      description: plan.description,
+      price_monthly: plan.price_monthly,
+      price_yearly: plan.price_yearly,
+      features: plan.features.join('\n'),
+      max_projects: plan.max_projects,
+      ai_credits: plan.ai_credits,
+      storage_gb: plan.storage_gb,
+      support_level: plan.support_level,
+      color: plan.color,
+      icon: plan.icon,
+      popular: plan.popular
+    })
+    setShowPlanDialog(true)
+  }
+  
+  const handleDeletePlan = (id: string) => {
+    if (confirm('Tem certeza que deseja excluir este plano?')) {
+      setPlans(plans.filter(p => p.id !== id))
+      showToast('🗑️ Plano excluído com sucesso!')
     }
   }
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'active': return 'Ativo'
-      case 'inactive': return 'Inativo'
-      case 'suspended': return 'Suspenso'
-      case 'completed': return 'Concluído'
-      case 'paused': return 'Pausado'
-      case 'cancelled': return 'Cancelado'
-      default: return 'Desconhecido'
+  
+  const togglePlanActive = (id: string) => {
+    setPlans(plans.map(p => 
+      p.id === id ? { ...p, active: !p.active } : p
+    ))
+    showToast('✅ Status do plano atualizado!')
+  }
+  
+  const handleCreatePromo = (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    const newPromo: Promotion = {
+      id: Date.now().toString(),
+      code: promoForm.code.toUpperCase(),
+      type: promoForm.type,
+      value: promoForm.value,
+      valid_until: promoForm.valid_until,
+      max_uses: promoForm.max_uses,
+      current_uses: 0,
+      active: true
+    }
+    
+    setPromotions([...promotions, newPromo])
+    setShowPromoDialog(false)
+    resetPromoForm()
+    showToast('🎁 Promoção criada com sucesso!')
+  }
+  
+  const handleUpdatePromo = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingPromo) return
+    
+    const updatedPromo: Promotion = {
+      ...editingPromo,
+      code: promoForm.code.toUpperCase(),
+      type: promoForm.type,
+      value: promoForm.value,
+      valid_until: promoForm.valid_until,
+      max_uses: promoForm.max_uses
+    }
+    
+    setPromotions(promotions.map(p => p.id === editingPromo.id ? updatedPromo : p))
+    setEditingPromo(null)
+    setShowPromoDialog(false)
+    resetPromoForm()
+    showToast('✅ Promoção atualizada com sucesso!')
+  }
+  
+  const handleEditPromo = (promo: Promotion) => {
+    setEditingPromo(promo)
+    setPromoForm({
+      code: promo.code,
+      type: promo.type,
+      value: promo.value,
+      valid_until: promo.valid_until,
+      max_uses: promo.max_uses
+    })
+    setShowPromoDialog(true)
+  }
+  
+  const handleDeletePromo = (id: string) => {
+    if (confirm('Tem certeza que deseja excluir esta promoção?')) {
+      setPromotions(promotions.filter(p => p.id !== id))
+      showToast('🗑️ Promoção excluída com sucesso!')
     }
   }
-
-  const getRoleText = (role: string) => {
-    switch (role) {
-      case 'admin': return 'Administrador'
-      case 'manager': return 'Gerente'
-      case 'user': return 'Usuário'
-      default: return 'Usuário'
-    }
+  
+  const togglePromoActive = (id: string) => {
+    setPromotions(promotions.map(p => 
+      p.id === id ? { ...p, active: !p.active } : p
+    ))
+    showToast('✅ Status da promoção atualizado!')
+  }
+  
+  const toggleUserStatus = (id: string) => {
+    setUsers(users.map(u => 
+      u.id === id ? { ...u, status: u.status === 'active' ? 'blocked' : 'active' } : u
+    ))
+    showToast('✅ Status do usuário atualizado!')
+  }
+  
+  const updateSettings = () => {
+    showToast('✅ Configurações salvas com sucesso!')
+  }
+  
+  const resetPlanForm = () => {
+    setPlanForm({
+      name: '',
+      description: '',
+      price_monthly: 0,
+      price_yearly: 0,
+      features: '',
+      max_projects: 0,
+      ai_credits: 0,
+      storage_gb: 0,
+      support_level: 'email',
+      color: 'from-blue-500 to-cyan-500',
+      icon: 'zap',
+      popular: false
+    })
+  }
+  
+  const resetPromoForm = () => {
+    setPromoForm({
+      code: '',
+      type: 'percentage',
+      value: 0,
+      valid_until: '',
+      max_uses: 0
+    })
   }
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value)
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR')
-  }
+  // Stats
+  const totalUsers = users.length
+  const activeUsers = users.filter(u => u.status === 'active').length
+  const totalRevenue = users.reduce((acc, user) => {
+    const plan = plans.find(p => p.name === user.plan)
+    return acc + (plan?.price_monthly || 0)
+  }, 0)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Header */}
-      <header className="bg-slate-900/80 backdrop-blur-sm border-b border-slate-700 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo */}
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center space-x-2">
-                <Shield className="h-8 w-8 text-yellow-400" />
-                <span className="text-2xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
-                  Admin Panel
-                </span>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50">
+      {/* Admin Header */}
+      <header className="bg-gradient-to-r from-slate-900 via-purple-900 to-pink-900 border-b border-purple-800 shadow-2xl">
+        <div className="max-w-[1600px] mx-auto px-6 lg:px-8">
+          <div className="flex justify-between items-center h-20">
+            <div className="flex items-center space-x-4">
+              <div className="bg-gradient-to-br from-purple-500 to-pink-600 p-3 rounded-xl shadow-lg">
+                <Shield className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-200 to-pink-200 bg-clip-text text-transparent">
+                  Painel Admin
+                </h1>
+                <p className="text-xs text-purple-300">SyncMyMind - Gerenciamento</p>
               </div>
             </div>
-
-            {/* Navigation */}
-            <nav className="hidden md:flex items-center space-x-8">
-              <button
-                onClick={() => setCurrentView('dashboard')}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  currentView === 'dashboard' 
-                    ? 'bg-yellow-500/20 text-yellow-400' 
-                    : 'text-gray-300 hover:text-white hover:bg-slate-700'
-                }`}
-              >
-                Dashboard
-              </button>
-              <button
-                onClick={() => setCurrentView('users')}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  currentView === 'users' 
-                    ? 'bg-yellow-500/20 text-yellow-400' 
-                    : 'text-gray-300 hover:text-white hover:bg-slate-700'
-                }`}
-              >
-                Usuários
-              </button>
-              <button
-                onClick={() => setCurrentView('projects')}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  currentView === 'projects' 
-                    ? 'bg-yellow-500/20 text-yellow-400' 
-                    : 'text-gray-300 hover:text-white hover:bg-slate-700'
-                }`}
-              >
-                Projetos
-              </button>
-              <button
-                onClick={() => setCurrentView('settings')}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  currentView === 'settings' 
-                    ? 'bg-yellow-500/20 text-yellow-400' 
-                    : 'text-gray-300 hover:text-white hover:bg-slate-700'
-                }`}
-              >
-                Configurações
-              </button>
-            </nav>
-
-            {/* Actions */}
+            
             <div className="flex items-center space-x-4">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-yellow-500 text-black">A</AvatarFallback>
+              <Badge className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white border-0">
+                <Crown className="h-3 w-3 mr-1" />
+                Administrador
+              </Badge>
+              
+              <Avatar className="cursor-pointer ring-2 ring-purple-400">
+                <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-600 text-white">
+                  <User className="h-5 w-5" />
+                </AvatarFallback>
               </Avatar>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLogout}
-                className="text-gray-300 hover:text-white"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Sair
-              </Button>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {currentView === 'dashboard' && (
-          <div className="space-y-8">
-            {/* Dashboard Header */}
+      <div className="max-w-[1600px] mx-auto px-6 lg:px-8 py-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-5 bg-white/80 backdrop-blur-sm shadow-lg border border-gray-200 p-1">
+            <TabsTrigger value="dashboard" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-600 data-[state=active]:text-white">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Dashboard
+            </TabsTrigger>
+            <TabsTrigger value="users" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-600 data-[state=active]:text-white">
+              <Users className="h-4 w-4 mr-2" />
+              Usuários
+            </TabsTrigger>
+            <TabsTrigger value="plans" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-600 data-[state=active]:text-white">
+              <CreditCard className="h-4 w-4 mr-2" />
+              Planos
+            </TabsTrigger>
+            <TabsTrigger value="promotions" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-600 data-[state=active]:text-white">
+              <Gift className="h-4 w-4 mr-2" />
+              Promoções
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-600 data-[state=active]:text-white">
+              <Settings className="h-4 w-4 mr-2" />
+              Configurações
+            </TabsTrigger>
+          </TabsList>
+
+          {/* DASHBOARD */}
+          <TabsContent value="dashboard" className="space-y-6">
             <div>
-              <h1 className="text-3xl font-bold text-white">Dashboard Administrativo</h1>
-              <p className="text-gray-400 mt-1">Visão geral do sistema SyncMyMind</p>
+              <h2 className="text-3xl font-bold text-gray-900">Dashboard Administrativo</h2>
+              <p className="text-gray-600 mt-1">Visão geral do sistema</p>
             </div>
 
-            {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
+              <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0 shadow-xl">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-300">Total de Usuários</CardTitle>
-                  <Users className="h-4 w-4 text-blue-400" />
+                  <CardTitle className="text-sm font-medium">Total de Usuários</CardTitle>
+                  <Users className="h-5 w-5" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-white">{stats.totalUsers}</div>
-                  <p className="text-xs text-gray-400">{stats.activeUsers} ativos</p>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-300">Total de Projetos</CardTitle>
-                  <FolderOpen className="h-4 w-4 text-green-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">{stats.totalProjects}</div>
-                  <p className="text-xs text-gray-400">{stats.activeProjects} ativos</p>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-300">Receita Total</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-green-400" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">{formatCurrency(stats.totalRevenue)}</div>
-                  <p className="text-xs text-gray-400">
-                    {stats.totalRevenue === 0 ? 'Sistema iniciando' : 'Receita acumulada'}
+                  <div className="text-3xl font-bold">{totalUsers}</div>
+                  <p className="text-xs text-blue-100 mt-1">
+                    {activeUsers} ativos
                   </p>
                 </CardContent>
               </Card>
 
-              <Card className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
+              <Card className="bg-gradient-to-br from-green-500 to-emerald-600 text-white border-0 shadow-xl">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-300">Lucro Total</CardTitle>
-                  <BarChart3 className="h-4 w-4 text-yellow-400" />
+                  <CardTitle className="text-sm font-medium">Receita Mensal</CardTitle>
+                  <DollarSign className="h-5 w-5" />
                 </CardHeader>
                 <CardContent>
-                  <div className={`text-2xl font-bold ${stats.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {formatCurrency(stats.totalProfit)}
-                  </div>
-                  <p className="text-xs text-gray-400">
-                    {stats.totalProfit === 0 ? 'Pronto para dados reais' : 'Lucro acumulado'}
+                  <div className="text-3xl font-bold">R$ {totalRevenue.toLocaleString()}</div>
+                  <p className="text-xs text-green-100 mt-1">
+                    +12% vs mês anterior
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-purple-500 to-pink-600 text-white border-0 shadow-xl">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Planos Ativos</CardTitle>
+                  <CreditCard className="h-5 w-5" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{plans.filter(p => p.active).length}</div>
+                  <p className="text-xs text-purple-100 mt-1">
+                    De {plans.length} planos totais
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-orange-500 to-red-600 text-white border-0 shadow-xl">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Promoções Ativas</CardTitle>
+                  <Gift className="h-5 w-5" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{promotions.filter(p => p.active).length}</div>
+                  <p className="text-xs text-orange-100 mt-1">
+                    {promotions.reduce((acc, p) => acc + p.current_uses, 0)} usos totais
                   </p>
                 </CardContent>
               </Card>
             </div>
 
-            {/* System Status */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="bg-slate-800/50 border-slate-700">
+              <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
                 <CardHeader>
-                  <CardTitle className="text-white">Status do Sistema</CardTitle>
+                  <CardTitle className="flex items-center">
+                    <TrendingUp className="h-5 w-5 mr-2 text-purple-600" />
+                    Planos Mais Populares
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <Alert className="bg-green-900/20 border-green-700">
-                    <CheckCircle className="h-4 w-4" />
-                    <AlertDescription className="text-green-400">
-                      Sistema integrado com Supabase e funcionando
-                    </AlertDescription>
-                  </Alert>
-                  
-                  <Alert className="bg-blue-900/20 border-blue-700">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription className="text-blue-400">
-                      {stats.totalUsers === 0 ? 'Aguardando primeiros usuários' : `${stats.totalUsers} usuários cadastrados`}
-                    </AlertDescription>
-                  </Alert>
-                  
-                  <Alert className="bg-yellow-900/20 border-yellow-700">
-                    <Clock className="h-4 w-4" />
-                    <AlertDescription className="text-yellow-400">
-                      {stats.totalProjects === 0 ? 'Nenhum projeto criado ainda' : `${stats.totalProjects} projetos no sistema`}
-                    </AlertDescription>
-                  </Alert>
+                  {plans.map(plan => {
+                    const userCount = users.filter(u => u.plan === plan.name).length
+                    return (
+                      <div key={plan.id} className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-10 h-10 bg-gradient-to-br ${plan.color} rounded-lg flex items-center justify-center`}>
+                            <Sparkles className="h-5 w-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">{plan.name}</p>
+                            <p className="text-sm text-gray-500">{userCount} usuários</p>
+                          </div>
+                        </div>
+                        <Badge className="bg-purple-100 text-purple-800 border-purple-300">
+                          R$ {plan.price_monthly}/mês
+                        </Badge>
+                      </div>
+                    )
+                  })}
                 </CardContent>
               </Card>
 
-              <Card className="bg-slate-800/50 border-slate-700">
+              <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
                 <CardHeader>
-                  <CardTitle className="text-white">Atividade Recente</CardTitle>
+                  <CardTitle className="flex items-center">
+                    <AlertCircle className="h-5 w-5 mr-2 text-orange-600" />
+                    Atividades Recentes
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {isLoading ? (
-                    <div className="text-center py-4">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-400 mx-auto"></div>
-                      <p className="text-gray-400 text-sm mt-2">Carregando...</p>
+                  <div className="flex items-start space-x-3">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Novo usuário cadastrado</p>
+                      <p className="text-xs text-gray-500">maria@example.com - há 2 horas</p>
                     </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {users.length === 0 && projects.length === 0 ? (
-                        <p className="text-gray-400 text-sm">Nenhuma atividade ainda</p>
-                      ) : (
-                        <>
-                          {users.slice(0, 3).map((user) => (
-                            <div key={user.id} className="flex items-center space-x-3 p-2 bg-slate-700/30 rounded-lg">
-                              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                  </div>
+                  <div className="flex items-start space-x-3">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Upgrade de plano</p>
+                      <p className="text-xs text-gray-500">João Silva: Básico → Profissional</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start space-x-3">
+                    <div className="w-2 h-2 bg-purple-500 rounded-full mt-2"></div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Promoção utilizada</p>
+                      <p className="text-xs text-gray-500">Código WELCOME50 - há 5 horas</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* USERS */}
+          <TabsContent value="users" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900">Gerenciar Usuários</h2>
+                <p className="text-gray-600 mt-1">Visualize e gerencie contas de usuários</p>
+              </div>
+              <div className="relative">
+                <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Input
+                  placeholder="Buscar usuários..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 w-80"
+                />
+              </div>
+            </div>
+
+            <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gradient-to-r from-purple-50 to-pink-50">
+                      <tr>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Usuário</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Plano</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Status</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Projetos</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Créditos IA</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Último Login</th>
+                        <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {users.map(user => (
+                        <tr key={user.id} className="hover:bg-purple-50/50 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center space-x-3">
+                              <Avatar>
+                                <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-600 text-white">
+                                  {user.name.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
                               <div>
-                                <p className="text-white text-sm">Novo usuário: {user.name}</p>
-                                <p className="text-gray-400 text-xs">{formatDate(user.created_at)}</p>
+                                <p className="font-medium text-gray-900">{user.name}</p>
+                                <p className="text-sm text-gray-500">{user.email}</p>
                               </div>
                             </div>
-                          ))}
-                          {projects.slice(0, 2).map((project) => (
-                            <div key={project.id} className="flex items-center space-x-3 p-2 bg-slate-700/30 rounded-lg">
-                              <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                              <div>
-                                <p className="text-white text-sm">Projeto criado: {project.name}</p>
-                                <p className="text-gray-400 text-xs">{formatDate(project.created_at)}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </>
-                      )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <Badge className="bg-purple-100 text-purple-800 border-purple-300">
+                              {user.plan}
+                            </Badge>
+                          </td>
+                          <td className="px-6 py-4">
+                            <Badge className={
+                              user.status === 'active' 
+                                ? 'bg-green-100 text-green-800 border-green-300'
+                                : 'bg-red-100 text-red-800 border-red-300'
+                            }>
+                              {user.status === 'active' ? 'Ativo' : 'Bloqueado'}
+                            </Badge>
+                          </td>
+                          <td className="px-6 py-4 text-gray-900">{user.projects_count}</td>
+                          <td className="px-6 py-4 text-gray-900">{user.ai_credits_used}</td>
+                          <td className="px-6 py-4 text-gray-500 text-sm">
+                            {new Date(user.last_login).toLocaleDateString('pt-BR')}
+                          </td>
+                          <td className="px-6 py-4">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => toggleUserStatus(user.id)}
+                              className="mr-2"
+                            >
+                              {user.status === 'active' ? (
+                                <>
+                                  <Lock className="h-3 w-3 mr-1" />
+                                  Bloquear
+                                </>
+                              ) : (
+                                <>
+                                  <Unlock className="h-3 w-3 mr-1" />
+                                  Desbloquear
+                                </>
+                              )}
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* PLANS */}
+          <TabsContent value="plans" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900">Gerenciar Planos</h2>
+                <p className="text-gray-600 mt-1">Configure e personalize os planos de assinatura</p>
+              </div>
+              <Button 
+                onClick={() => {
+                  setEditingPlan(null)
+                  resetPlanForm()
+                  setShowPlanDialog(true)
+                }}
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Novo Plano
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {plans.map(plan => (
+                <Card key={plan.id} className={`shadow-xl border-0 bg-white/80 backdrop-blur-sm relative ${
+                  plan.popular ? 'ring-2 ring-purple-500' : ''
+                }`}>
+                  {plan.popular && (
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0">
+                        Mais Popular
+                      </Badge>
                     </div>
                   )}
+                  
+                  <CardHeader className="text-center pb-4">
+                    <div className={`w-16 h-16 bg-gradient-to-br ${plan.color} rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg`}>
+                      {plan.icon === 'zap' && <Zap className="h-8 w-8 text-white" />}
+                      {plan.icon === 'trending-up' && <TrendingUp className="h-8 w-8 text-white" />}
+                      {plan.icon === 'shield' && <Shield className="h-8 w-8 text-white" />}
+                    </div>
+                    <CardTitle className="text-2xl">{plan.name}</CardTitle>
+                    <CardDescription className="text-sm mt-2">{plan.description}</CardDescription>
+                    <div className="flex items-baseline justify-center mt-4">
+                      <span className="text-4xl font-bold text-gray-900">R$ {plan.price_monthly}</span>
+                      <span className="text-gray-600 ml-2">/mês</span>
+                    </div>
+                    <p className="text-sm text-gray-500 mt-1">
+                      ou R$ {plan.price_yearly}/ano
+                    </p>
+                  </CardHeader>
+                  
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Projetos:</span>
+                        <span className="font-medium text-gray-900">
+                          {plan.max_projects === -1 ? 'Ilimitado' : plan.max_projects}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Créditos IA:</span>
+                        <span className="font-medium text-gray-900">
+                          {plan.ai_credits === -1 ? 'Ilimitado' : plan.ai_credits}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Armazenamento:</span>
+                        <span className="font-medium text-gray-900">
+                          {plan.storage_gb === -1 ? 'Ilimitado' : `${plan.storage_gb}GB`}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Suporte:</span>
+                        <span className="font-medium text-gray-900 capitalize">{plan.support_level}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between pt-4 border-t">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={plan.active}
+                          onCheckedChange={() => togglePlanActive(plan.id)}
+                        />
+                        <span className="text-sm text-gray-600">
+                          {plan.active ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </div>
+                      <div className="flex space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEditPlan(plan)}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeletePlan(plan.id)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          {/* PROMOTIONS */}
+          <TabsContent value="promotions" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900">Gerenciar Promoções</h2>
+                <p className="text-gray-600 mt-1">Crie cupons e ofertas especiais</p>
+              </div>
+              <Button 
+                onClick={() => {
+                  setEditingPromo(null)
+                  resetPromoForm()
+                  setShowPromoDialog(true)
+                }}
+                className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 shadow-lg"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Nova Promoção
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {promotions.map(promo => (
+                <Card key={promo.id} className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+                          <Gift className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-xl">{promo.code}</CardTitle>
+                          <CardDescription className="text-sm">
+                            {promo.type === 'percentage' ? `${promo.value}% OFF` : `R$ ${promo.value} OFF`}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <Badge className={
+                        promo.active 
+                          ? 'bg-green-100 text-green-800 border-green-300'
+                          : 'bg-gray-100 text-gray-800 border-gray-300'
+                      }>
+                        {promo.active ? 'Ativa' : 'Inativa'}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Válido até:</span>
+                        <span className="font-medium text-gray-900">
+                          {new Date(promo.valid_until).toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Usos:</span>
+                        <span className="font-medium text-gray-900">
+                          {promo.current_uses} / {promo.max_uses}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between pt-4 border-t">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={promo.active}
+                          onCheckedChange={() => togglePromoActive(promo.id)}
+                        />
+                        <span className="text-sm text-gray-600">
+                          {promo.active ? 'Ativa' : 'Inativa'}
+                        </span>
+                      </div>
+                      <div className="flex space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEditPromo(promo)}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeletePromo(promo.id)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          {/* SETTINGS */}
+          <TabsContent value="settings" className="space-y-6">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900">Configurações do Sistema</h2>
+              <p className="text-gray-600 mt-1">Ajuste parâmetros globais do aplicativo</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Brain className="h-5 w-5 mr-2 text-purple-600" />
+                    Configurações de IA
+                  </CardTitle>
+                  <CardDescription>Ajuste o comportamento do assistente de IA</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Modelo de IA</Label>
+                    <Select value={settings.ai_model} onValueChange={(value) => setSettings({...settings, ai_model: value})}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="gpt-4o">GPT-4o (Recomendado)</SelectItem>
+                        <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
+                        <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Temperatura (Criatividade)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={settings.ai_temperature}
+                      onChange={(e) => setSettings({...settings, ai_temperature: parseFloat(e.target.value)})}
+                    />
+                    <p className="text-xs text-gray-500">0 = Mais preciso, 1 = Mais criativo</p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Máximo de Tokens</Label>
+                    <Input
+                      type="number"
+                      value={settings.max_tokens}
+                      onChange={(e) => setSettings({...settings, max_tokens: parseInt(e.target.value)})}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Settings className="h-5 w-5 mr-2 text-blue-600" />
+                    Configurações Gerais
+                  </CardTitle>
+                  <CardDescription>Controle funcionalidades do sistema</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Login com Google</Label>
+                      <p className="text-xs text-gray-500">Permitir autenticação via Google</p>
+                    </div>
+                    <Switch
+                      checked={settings.enable_google_auth}
+                      onCheckedChange={(checked) => setSettings({...settings, enable_google_auth: checked})}
+                    />
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Login com Apple</Label>
+                      <p className="text-xs text-gray-500">Permitir autenticação via Apple</p>
+                    </div>
+                    <Switch
+                      checked={settings.enable_apple_auth}
+                      onCheckedChange={(checked) => setSettings({...settings, enable_apple_auth: checked})}
+                    />
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Novos Cadastros</Label>
+                      <p className="text-xs text-gray-500">Permitir registro de novos usuários</p>
+                    </div>
+                    <Switch
+                      checked={settings.allow_new_signups}
+                      onCheckedChange={(checked) => setSettings({...settings, allow_new_signups: checked})}
+                    />
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Modo Manutenção</Label>
+                      <p className="text-xs text-gray-500">Desabilitar acesso ao sistema</p>
+                    </div>
+                    <Switch
+                      checked={settings.maintenance_mode}
+                      onCheckedChange={(checked) => setSettings({...settings, maintenance_mode: checked})}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             </div>
-          </div>
-        )}
 
-        {currentView === 'users' && (
-          <div className="space-y-8">
-            {/* Users Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h1 className="text-3xl font-bold text-white">Gestão de Usuários</h1>
-                <p className="text-gray-400 mt-1">Gerencie todos os usuários da plataforma</p>
-              </div>
-              <Dialog open={isCreateUserOpen} onOpenChange={setIsCreateUserOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-600 hover:to-orange-700">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Novo Usuário
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="bg-slate-800 border-slate-700">
-                  <DialogHeader>
-                    <DialogTitle className="text-white">Criar Novo Usuário</DialogTitle>
-                    <DialogDescription className="text-gray-400">
-                      Adicione um novo usuário ao sistema
-                    </DialogDescription>
-                  </DialogHeader>
-                  <form onSubmit={(e) => {
-                    e.preventDefault()
-                    handleCreateUser(new FormData(e.currentTarget))
-                  }} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name" className="text-gray-300">Nome Completo</Label>
-                      <Input
-                        id="name"
-                        name="name"
-                        required
-                        className="bg-slate-700 border-slate-600 text-white"
-                        placeholder="Nome do usuário"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email" className="text-gray-300">Email</Label>
-                      <Input
-                        id="email"
-                        name="email"
-                        type="email"
-                        required
-                        className="bg-slate-700 border-slate-600 text-white"
-                        placeholder="email@exemplo.com"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="phone" className="text-gray-300">Telefone</Label>
-                      <Input
-                        id="phone"
-                        name="phone"
-                        className="bg-slate-700 border-slate-600 text-white"
-                        placeholder="(11) 99999-9999"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="role" className="text-gray-300">Função</Label>
-                      <Select name="role" defaultValue="user">
-                        <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-800 border-slate-700">
-                          <SelectItem value="user">Usuário</SelectItem>
-                          <SelectItem value="manager">Gerente</SelectItem>
-                          <SelectItem value="admin">Administrador</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex justify-end space-x-3">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setIsCreateUserOpen(false)}
-                        className="border-slate-600 text-gray-300 hover:bg-slate-700"
-                      >
-                        Cancelar
-                      </Button>
-                      <Button
-                        type="submit"
-                        className="bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-600 hover:to-orange-700"
-                      >
-                        Criar Usuário
-                      </Button>
-                    </div>
-                  </form>
-                </DialogContent>
-              </Dialog>
+            <div className="flex justify-end">
+              <Button 
+                onClick={updateSettings}
+                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg"
+              >
+                <Check className="h-4 w-4 mr-2" />
+                Salvar Configurações
+              </Button>
             </div>
+          </TabsContent>
+        </Tabs>
+      </div>
 
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <Input
-                    placeholder="Buscar usuários..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 bg-slate-800 border-slate-600 text-white"
-                  />
-                </div>
+      {/* PLAN DIALOG */}
+      <Dialog open={showPlanDialog} onOpenChange={setShowPlanDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingPlan ? 'Editar Plano' : 'Criar Novo Plano'}</DialogTitle>
+            <DialogDescription>
+              Configure os detalhes do plano de assinatura
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={editingPlan ? handleUpdatePlan : handleCreatePlan} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="plan-name">Nome do Plano</Label>
+                <Input
+                  id="plan-name"
+                  value={planForm.name}
+                  onChange={(e) => setPlanForm({...planForm, name: e.target.value})}
+                  placeholder="Ex: Profissional"
+                  required
+                />
               </div>
-              <Select value={filterStatus} onValueChange={(value: any) => setFilterStatus(value)}>
-                <SelectTrigger className="w-full sm:w-48 bg-slate-800 border-slate-600 text-white">
-                  <Filter className="h-4 w-4 mr-2" />
+              
+              <div className="space-y-2">
+                <Label htmlFor="plan-color">Cor do Gradiente</Label>
+                <Select value={planForm.color} onValueChange={(value) => setPlanForm({...planForm, color: value})}>
+                  <SelectTrigger id="plan-color">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="from-blue-500 to-cyan-500">Azul</SelectItem>
+                    <SelectItem value="from-purple-500 to-pink-500">Roxo</SelectItem>
+                    <SelectItem value="from-orange-500 to-red-500">Laranja</SelectItem>
+                    <SelectItem value="from-green-500 to-emerald-500">Verde</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="plan-description">Descrição</Label>
+              <Textarea
+                id="plan-description"
+                value={planForm.description}
+                onChange={(e) => setPlanForm({...planForm, description: e.target.value})}
+                placeholder="Breve descrição do plano"
+                required
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="plan-price-monthly">Preço Mensal (R$)</Label>
+                <Input
+                  id="plan-price-monthly"
+                  type="number"
+                  value={planForm.price_monthly}
+                  onChange={(e) => setPlanForm({...planForm, price_monthly: parseFloat(e.target.value)})}
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="plan-price-yearly">Preço Anual (R$)</Label>
+                <Input
+                  id="plan-price-yearly"
+                  type="number"
+                  value={planForm.price_yearly}
+                  onChange={(e) => setPlanForm({...planForm, price_yearly: parseFloat(e.target.value)})}
+                  required
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="plan-projects">Máx. Projetos</Label>
+                <Input
+                  id="plan-projects"
+                  type="number"
+                  value={planForm.max_projects}
+                  onChange={(e) => setPlanForm({...planForm, max_projects: parseInt(e.target.value)})}
+                  placeholder="-1 = ilimitado"
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="plan-credits">Créditos IA</Label>
+                <Input
+                  id="plan-credits"
+                  type="number"
+                  value={planForm.ai_credits}
+                  onChange={(e) => setPlanForm({...planForm, ai_credits: parseInt(e.target.value)})}
+                  placeholder="-1 = ilimitado"
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="plan-storage">Storage (GB)</Label>
+                <Input
+                  id="plan-storage"
+                  type="number"
+                  value={planForm.storage_gb}
+                  onChange={(e) => setPlanForm({...planForm, storage_gb: parseInt(e.target.value)})}
+                  placeholder="-1 = ilimitado"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="plan-support">Nível de Suporte</Label>
+              <Select value={planForm.support_level} onValueChange={(value: 'email' | 'priority' | '24/7') => setPlanForm({...planForm, support_level: value})}>
+                <SelectTrigger id="plan-support">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="all">Todos os Status</SelectItem>
-                  <SelectItem value="active">Ativos</SelectItem>
-                  <SelectItem value="inactive">Inativos</SelectItem>
-                  <SelectItem value="suspended">Suspensos</SelectItem>
+                <SelectContent>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="priority">Prioritário</SelectItem>
+                  <SelectItem value="24/7">24/7</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Users Table */}
-            <Card className="bg-slate-800/50 border-slate-700">
-              <CardContent className="p-6">
-                {isLoading ? (
-                  <div className="text-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400 mx-auto mb-4"></div>
-                    <p className="text-gray-400">Carregando usuários...</p>
-                  </div>
-                ) : users.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Users className="h-16 w-16 text-gray-600 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-white mb-2">Nenhum usuário cadastrado</h3>
-                    <p className="text-gray-400 mb-6">Os usuários aparecerão aqui quando se cadastrarem na plataforma</p>
-                    <Button 
-                      onClick={() => setIsCreateUserOpen(true)}
-                      className="bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-600 hover:to-orange-700"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Criar Primeiro Usuário
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="border-b border-slate-700">
-                        <tr>
-                          <th className="text-left p-4 text-gray-300 font-medium">Usuário</th>
-                          <th className="text-left p-4 text-gray-300 font-medium">Função</th>
-                          <th className="text-left p-4 text-gray-300 font-medium">Status</th>
-                          <th className="text-left p-4 text-gray-300 font-medium">Projetos</th>
-                          <th className="text-left p-4 text-gray-300 font-medium">Cadastro</th>
-                          <th className="text-left p-4 text-gray-300 font-medium">Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredUsers.map((user) => (
-                          <tr key={user.id} className="border-b border-slate-700/50 hover:bg-slate-700/20">
-                            <td className="p-4">
-                              <div className="flex items-center space-x-3">
-                                <Avatar className="h-10 w-10">
-                                  <AvatarFallback className="bg-cyan-500 text-white">
-                                    {user.name.split(' ').map(n => n[0]).join('')}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <p className="text-white font-medium">{user.name}</p>
-                                  <p className="text-gray-400 text-sm">{user.email}</p>
-                                  {user.phone && (
-                                    <p className="text-gray-500 text-xs">{user.phone}</p>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-4">
-                              <Badge variant="outline" className="border-slate-600 text-gray-300">
-                                {getRoleText(user.role)}
-                              </Badge>
-                            </td>
-                            <td className="p-4">
-                              <Badge className={`${getStatusColor(user.status)} text-white`}>
-                                {getStatusText(user.status)}
-                              </Badge>
-                            </td>
-                            <td className="p-4">
-                              <span className="text-white">{user.projects_count || 0}</span>
-                            </td>
-                            <td className="p-4">
-                              <span className="text-gray-400 text-sm">
-                                {formatDate(user.created_at)}
-                              </span>
-                            </td>
-                            <td className="p-4">
-                              <div className="flex items-center space-x-2">
-                                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
-                                  <Edit3 className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  onClick={() => handleDeleteUser(user.id)}
-                                  className="text-gray-400 hover:text-red-400"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {currentView === 'projects' && (
-          <div className="space-y-8">
-            {/* Projects Header */}
-            <div>
-              <h1 className="text-3xl font-bold text-white">Gestão de Projetos</h1>
-              <p className="text-gray-400 mt-1">Monitore todos os projetos da plataforma</p>
+            
+            <div className="space-y-2">
+              <Label htmlFor="plan-features">Recursos (um por linha)</Label>
+              <Textarea
+                id="plan-features"
+                value={planForm.features}
+                onChange={(e) => setPlanForm({...planForm, features: e.target.value})}
+                placeholder="Até 5 projetos ativos&#10;10 créditos de IA por mês&#10;Assistente de IA básico"
+                rows={6}
+                required
+              />
             </div>
+            
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="plan-popular"
+                checked={planForm.popular}
+                onCheckedChange={(checked) => setPlanForm({...planForm, popular: checked})}
+              />
+              <Label htmlFor="plan-popular">Marcar como "Mais Popular"</Label>
+            </div>
+            
+            <div className="flex justify-end space-x-3 pt-4">
+              <Button type="button" variant="outline" onClick={() => setShowPlanDialog(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" className="bg-gradient-to-r from-purple-600 to-pink-600">
+                {editingPlan ? 'Atualizar' : 'Criar'} Plano
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-            {/* Projects Grid */}
-            {isLoading ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400 mx-auto mb-4"></div>
-                <p className="text-gray-400">Carregando projetos...</p>
+      {/* PROMO DIALOG */}
+      <Dialog open={showPromoDialog} onOpenChange={setShowPromoDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingPromo ? 'Editar Promoção' : 'Criar Nova Promoção'}</DialogTitle>
+            <DialogDescription>
+              Configure cupom de desconto ou oferta especial
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={editingPromo ? handleUpdatePromo : handleCreatePromo} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="promo-code">Código do Cupom</Label>
+              <Input
+                id="promo-code"
+                value={promoForm.code}
+                onChange={(e) => setPromoForm({...promoForm, code: e.target.value.toUpperCase()})}
+                placeholder="Ex: WELCOME50"
+                required
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="promo-type">Tipo de Desconto</Label>
+                <Select value={promoForm.type} onValueChange={(value: 'percentage' | 'fixed') => setPromoForm({...promoForm, type: value})}>
+                  <SelectTrigger id="promo-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentage">Porcentagem (%)</SelectItem>
+                    <SelectItem value="fixed">Valor Fixo (R$)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            ) : projects.length === 0 ? (
-              <Card className="bg-slate-800/50 border-slate-700">
-                <CardContent className="p-12">
-                  <div className="text-center">
-                    <FolderOpen className="h-16 w-16 text-gray-600 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-white mb-2">Nenhum projeto criado</h3>
-                    <p className="text-gray-400">Os projetos dos usuários aparecerão aqui quando forem criados</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {projects.map((project) => (
-                  <Card key={project.id} className="bg-slate-800/50 border-slate-700 backdrop-blur-sm">
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <CardTitle className="text-white">{project.name}</CardTitle>
-                          <CardDescription className="text-gray-400 mt-1">
-                            {project.description}
-                          </CardDescription>
-                        </div>
-                        <Badge className={`${getStatusColor(project.status)} text-white`}>
-                          {getStatusText(project.status)}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span className="text-gray-400">Progresso</span>
-                          <span className="text-white">{project.progress}%</span>
-                        </div>
-                        <Progress value={project.progress} className="h-2" />
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <p className="text-gray-400">Receita</p>
-                          <p className="text-green-400 font-medium">{formatCurrency(project.revenue)}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-400">Lucro</p>
-                          <p className={`font-medium ${project.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {formatCurrency(project.profit)}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-700">
-                        <div className="text-sm text-gray-400">
-                          <p>Por {project.owner_name}</p>
-                          <p>{project.team_size} membros</p>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
-                            <Edit3 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+              
+              <div className="space-y-2">
+                <Label htmlFor="promo-value">Valor</Label>
+                <Input
+                  id="promo-value"
+                  type="number"
+                  value={promoForm.value}
+                  onChange={(e) => setPromoForm({...promoForm, value: parseFloat(e.target.value)})}
+                  placeholder={promoForm.type === 'percentage' ? '50' : '100'}
+                  required
+                />
               </div>
-            )}
-          </div>
-        )}
-
-        {currentView === 'settings' && (
-          <div className="space-y-8">
-            {/* Settings Header */}
-            <div>
-              <h1 className="text-3xl font-bold text-white">Configurações do Sistema</h1>
-              <p className="text-gray-400 mt-1">Gerencie as configurações da plataforma</p>
             </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="bg-slate-800/50 border-slate-700">
-                <CardHeader>
-                  <CardTitle className="text-white">Configurações Gerais</CardTitle>
-                  <CardDescription className="text-gray-400">
-                    Configurações básicas da plataforma
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-gray-300">Nome da Plataforma</Label>
-                    <Input
-                      defaultValue="SyncMyMind"
-                      className="bg-slate-700 border-slate-600 text-white"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-gray-300">Email de Suporte</Label>
-                    <Input
-                      defaultValue="suporte@syncmymind.com"
-                      className="bg-slate-700 border-slate-600 text-white"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-gray-300">Limite de Projetos por Usuário</Label>
-                    <Input
-                      type="number"
-                      defaultValue="10"
-                      className="bg-slate-700 border-slate-600 text-white"
-                    />
-                  </div>
-                  <Button className="bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-600 hover:to-orange-700">
-                    Salvar Configurações
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-slate-800/50 border-slate-700">
-                <CardHeader>
-                  <CardTitle className="text-white">Integração Supabase</CardTitle>
-                  <CardDescription className="text-gray-400">
-                    Status da conexão com banco de dados
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Alert className="bg-green-900/20 border-green-700">
-                    <CheckCircle className="h-4 w-4" />
-                    <AlertDescription className="text-green-400">
-                      Conectado ao Supabase com sucesso
-                    </AlertDescription>
-                  </Alert>
-                  
-                  <div className="space-y-3">
-                    <Button variant="outline" className="w-full border-slate-600 text-gray-300 hover:bg-slate-700">
-                      Testar Conexão
-                    </Button>
-                    <Button variant="outline" className="w-full border-slate-600 text-gray-300 hover:bg-slate-700">
-                      Backup de Dados
-                    </Button>
-                    <Button variant="outline" className="w-full border-slate-600 text-gray-300 hover:bg-slate-700">
-                      Logs do Sistema
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="promo-valid">Válido Até</Label>
+                <Input
+                  id="promo-valid"
+                  type="date"
+                  value={promoForm.valid_until}
+                  onChange={(e) => setPromoForm({...promoForm, valid_until: e.target.value})}
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="promo-uses">Máximo de Usos</Label>
+                <Input
+                  id="promo-uses"
+                  type="number"
+                  value={promoForm.max_uses}
+                  onChange={(e) => setPromoForm({...promoForm, max_uses: parseInt(e.target.value)})}
+                  required
+                />
+              </div>
             </div>
-          </div>
-        )}
-      </main>
+            
+            <div className="flex justify-end space-x-3 pt-4">
+              <Button type="button" variant="outline" onClick={() => setShowPromoDialog(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" className="bg-gradient-to-r from-orange-600 to-red-600">
+                {editingPromo ? 'Atualizar' : 'Criar'} Promoção
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
